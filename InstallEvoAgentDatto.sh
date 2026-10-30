@@ -17,6 +17,7 @@
 #
 # Environment variables (set them as Datto component variables):
 #   EVO_DEPLOYMENT_TOKEN          like --deployment-token
+#   EVO_TENANT_NAME               like --tenant-name (MSP-wide keys only)
 #   EVO_OVERRIDE_API_HOSTNAME     like --api-override-url
 #   EVO_OVERRIDE_BEACON_HOSTNAME  like --beacon-override-url
 #   EVO_DEPLOY_ENV / EVO_ENV      production | staging | local (default: production)
@@ -94,6 +95,8 @@ PKG_PATH_LOCAL="$(trim "${EVO_PKG_PATH:-}")"
 DEPLOYMENT_TOKEN="$(trim "${EVO_DEPLOYMENT_TOKEN:-}")"
 DEPLOY_ENV="$(trim "${EVO_DEPLOY_ENV:-${EVO_ENV:-}}")"
 DEPLOY_ENV="${DEPLOY_ENV:-production}"
+# Tenant for an MSP-wide deployment key; ignored for tenant tokens.
+TENANT_NAME="$(trim "${EVO_TENANT_NAME:-${CS_PROFILE_NAME:-}}")"
 API_OVERRIDE_URL="$(trim "${EVO_OVERRIDE_API_HOSTNAME:-}")"
 BEACON_OVERRIDE_URL="$(trim "${EVO_OVERRIDE_BEACON_HOSTNAME:-}")"
 # The username is trimmed; the password is used exactly as given.
@@ -214,6 +217,9 @@ Provisioning (preferred since agent 2.5):
   sudo ./InstallEvoAgentDatto.sh --deployment-token TKN [--environment production|staging|local]
   A token that is already applied (same token and environment, agent enrolled) is not
   re-sent; a different token re-enrolls the agent.
+  MSP-wide key: --tenant-name NAME (or EVO_TENANT_NAME; default: the Datto site) picks the
+  tenant. Ignored for tenant tokens.
+  sudo ./InstallEvoAgentDatto.sh --verify-failsafe     # re-check the fail-safe user, no reinstall
 
 SecureToken for the Evo hidden admin (credentials from the environment only):
   sudo ADMIN_USERNAME=admin ADMIN_PASSWORD=... ./InstallEvoAgentDatto.sh [--upgrade]
@@ -232,7 +238,7 @@ Uninstall:
   sudo ./InstallEvoAgentDatto.sh --uninstall           # alias: --remove
 
 Environment variables (Datto component variables):
-  EVO_DEPLOYMENT_TOKEN, EVO_OVERRIDE_API_HOSTNAME, EVO_DEPLOY_ENV
+  EVO_DEPLOYMENT_TOKEN, EVO_TENANT_NAME, EVO_OVERRIDE_API_HOSTNAME, EVO_DEPLOY_ENV
 Environment variables (handy for Ninja RMM):
   EVO_DEPLOYMENT_TOKEN, EVO_OVERRIDE_API_HOSTNAME, EVO_OVERRIDE_BEACON_HOSTNAME,
   EVO_DEPLOY_ENV ADMIN_USERNAME, ADMIN_PASSWORD, EVO_SECURETOKEN_WAIT_SECONDS (default 180)
@@ -586,9 +592,10 @@ prepare_deployment_payload() {
         return 0
     fi
 
-    local escaped_token escaped_env seed_tmp
+    local escaped_token escaped_env escaped_tenant seed_tmp
     escaped_token=$(json_escape "$DEPLOYMENT_TOKEN")
     escaped_env=$(json_escape "$DEPLOY_ENV")
+    escaped_tenant=$(json_escape "$TENANT_NAME")
     # Write via mktemp + mv so a pre-existing symlink at SEED_FILE is replaced, not followed.
     seed_tmp=$(mktemp /private/tmp/evo-seed.XXXXXX) || {
         log_err "Could not create a temporary seed file."
@@ -596,7 +603,7 @@ prepare_deployment_payload() {
     }
     (
         umask 077
-        printf '{"deploymentToken":"%s","evoEnv":"%s"}\n' "$escaped_token" "$escaped_env" > "$seed_tmp"
+        printf '{"deploymentToken":"%s","evoEnv":"%s","tenantName":"%s"}\n' "$escaped_token" "$escaped_env" "$escaped_tenant" > "$seed_tmp"
     )
     chmod 600 "$seed_tmp" || true
     mv -f "$seed_tmp" "$SEED_FILE"
@@ -735,6 +742,25 @@ confirm_enrollment() {
         exit "$EXIT_ENROLL"
     fi
 }
+
+# Re-check the fail-safe user once it exists; no reinstall needed.
+verify_failsafe() {
+    require_root
+    if [ ! -x "$HELPER_EXEC" ]; then
+        log_err "Evo agent is not installed."
+        exit "$EXIT_PREFLIGHT"
+    fi
+    local rc=0
+    "$HELPER_EXEC" -verify-failsafe || rc=$?
+    case "$rc" in
+        0) log_ok "Fail-safe user exists on this Mac (or isn't needed for this token)." ;;
+        1) log_err "The configured fail-safe user does not exist on this Mac." ;;
+        2) log_warn "No fail-safe user is configured for this Mac's deployment token." ;;
+        *) log_err "Unexpected exit code from fail-safe verification ($rc)." ;;
+    esac
+    exit "$rc"
+}
+
 
 install_app() {
     require_root
@@ -1175,6 +1201,11 @@ while [ $# -gt 0 ]; do
             DEPLOYMENT_TOKEN="$(trim "${2:-}")"
             [ -n "$DEPLOYMENT_TOKEN" ] || { log_err "--deployment-token requires a value"; exit "$EXIT_USAGE"; }
             shift 2 ;;
+        --tenant-name)
+            TENANT_NAME="$(trim "${2:-}")"
+            [ -n "$TENANT_NAME" ] || { log_err "--tenant-name requires a value"; exit "$EXIT_USAGE"; }
+            shift 2 ;;
+        --verify-failsafe) ACTION="verify-failsafe"; shift ;;
         --api-override-url)
             API_OVERRIDE_URL="$(trim "${2:-}")"
             [ -n "$API_OVERRIDE_URL" ] || { log_err "--api-override-url requires a value"; exit "$EXIT_USAGE"; }
@@ -1220,5 +1251,6 @@ echo "-------------------------------------"
 case "$ACTION" in
     uninstall) uninstall_app ;;
     securetoken) securetoken_only ;;
+    verify-failsafe) verify_failsafe ;;
     *) install_app ;;
 esac
