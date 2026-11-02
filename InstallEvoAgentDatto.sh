@@ -574,6 +574,14 @@ record_token_fingerprint() {
     fi
 }
 
+# Tenant-name hint for the Helper. Written next to the seed because the package's
+# token-file path never reads the seed's tenantName.
+write_tenant_hint() {
+    [ -n "$TENANT_NAME" ] || return 0
+    mkdir -p "$EVO_SUPPORT_DIR"
+    (umask 077; printf '%s' "$TENANT_NAME" > "${EVO_SUPPORT_DIR}/tenant-name-hint")
+}
+
 prepare_deployment_payload() {
     # A leftover legacy token file would take priority over the seed file in postinstall.
     rm -f "$LEGACY_TOKEN_FILE" 2>/dev/null || true
@@ -607,6 +615,7 @@ prepare_deployment_payload() {
     )
     chmod 600 "$seed_tmp" || true
     mv -f "$seed_tmp" "$SEED_FILE"
+    write_tenant_hint
     TOKEN_SENT=true
     log_ok "Wrote $SEED_FILE (evoEnv=${DEPLOY_ENV}, token length=${#DEPLOYMENT_TOKEN})"
 }

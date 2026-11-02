@@ -219,25 +219,26 @@ Place the package on the Mac first (e.g. `/tmp/EvoMacAgent-2.1.7.9.pkg`), then s
 
 ## Deploying from an RMM or MDM
 
-The script never reads from stdin, so it can be piped straight from a pinned release tag on any tool that runs a shell script as root:
+The script never reads from stdin. Download it from a pinned release tag first, then run it, so a failed download fails the job instead of running an empty script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/evosecurity/EvoMacAgentDeploymentScripts/v1.0.0/InstallEvoAgent.sh \
-  | sudo bash -s -- --deployment-token '<token>'
+curl -fsSL -o /tmp/InstallEvoAgent.sh \
+  https://raw.githubusercontent.com/evosecurity/EvoMacAgentDeploymentScripts/v1.0.0/InstallEvoAgent.sh \
+  && sudo bash /tmp/InstallEvoAgent.sh --deployment-token '<token>'
 ```
 
 **MSP-wide keys.** With an MSP-wide key the Mac lands in the tenant named by `--tenant-name` / `EVO_TENANT_NAME`. Without one, the script uses the NinjaOne organization (`NINJA_ORGANIZATION_NAME`), or the Datto site (`CS_PROFILE_NAME`) in `InstallEvoAgentDatto.sh`. An unknown name creates the tenant; a likely typo of an existing tenant lands in **Unassigned** for review in the portal.
 
-**Fail-safe user.** Unattended installs (scripts, RMMs, MDM pkg pushes) no longer fail when the token's fail-safe user is missing or not set (EUE-only tokens have none). The install logs a warning; once the account exists, `sudo ./InstallEvoAgent.sh --verify-failsafe` confirms it without reinstalling.
+**Fail-safe user.** Tokens that disable the Evo login window (the EUE-only preset) don't need a fail-safe user, so those installs succeed without one. Every other token still requires the fail-safe user to exist on the Mac; once the account exists, `sudo ./InstallEvoAgent.sh --verify-failsafe` confirms it without reinstalling.
 
 ### Jamf Pro
 Policy > Scripts: add `InstallEvoAgent.sh` with parameter 4 = token and run it with `--deployment-token "$4"` (add `--tenant-name "$5"` for an MSP-wide key). Or push the pkg plus the configuration profile below, with no script.
 
 ### Microsoft Intune (macOS shell script)
-Devices > macOS > Shell scripts: upload a wrapper containing the pinned `curl … | sudo bash -s -- …` line above, with **Run script as signed-in user: No**. Or deploy the pkg as a macOS LOB app plus the configuration profile below.
+Devices > macOS > Shell scripts: upload a wrapper containing the pinned download-then-run lines above, with **Run script as signed-in user: No**. Or deploy the pkg as a macOS LOB app plus the configuration profile below.
 
 ### Kandji
-Custom Script library item (run once) with the pinned `curl … | sudo bash -s -- --deployment-token '<token>'` line, or a Custom App for the pkg plus a Custom Profile.
+Custom Script library item (run once) with the pinned download-then-run lines above, or a Custom App for the pkg plus a Custom Profile.
 
 ### NinjaOne
 See [Install with NinjaOne custom fields](#install-with-ninjaone-custom-fields). With an MSP-wide key, each Ninja organization becomes its tenant automatically.
