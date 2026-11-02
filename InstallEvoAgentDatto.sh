@@ -730,7 +730,7 @@ install_artifact_file() {
 # An MSP-wide key whose tenant name didn't resolve waits for an Evo admin to assign the
 # Mac. That is a successful install (the agent keeps connecting), so it must not fail the job.
 report_pending_enrollment() {
-    log_ok "Installed. Waiting for an Evo admin to assign this Mac to a customer (Endpoints > Pending installs)."
+    log_ok "Installed. Waiting for an Evo admin to assign this Mac to a customer (Endpoints > Computers > Installs waiting for a customer)."
 }
 
 # postinstall enrolls with the token and rolls back / fails on a bad token, so after a
