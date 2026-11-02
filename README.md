@@ -229,6 +229,8 @@ curl -fsSL -o /tmp/InstallEvoAgent.sh \
 
 **MSP-wide keys.** With an MSP-wide key the Mac lands in the tenant named by `--tenant-name` / `EVO_TENANT_NAME`. Without one, the script uses the NinjaOne organization (`NINJA_ORGANIZATION_NAME`), or the Datto site (`CS_PROFILE_NAME`) in `InstallEvoAgentDatto.sh`. An unknown name creates the tenant; a likely typo of an existing tenant lands in **Unassigned** for review in the portal.
 
+**Pending installs.** If an MSP-wide key's tenant name doesn't resolve, the install waits as *pending* until an Evo admin assigns it (Endpoints > Pending installs). The scripts report that as a successful install (exit 0), not a failure, so the RMM doesn't retry; the agent keeps connecting until it is assigned.
+
 **Fail-safe user.** Tokens that disable the Evo login window (the EUE-only preset) don't need a fail-safe user, so those installs succeed without one. Every other token still requires the fail-safe user to exist on the Mac; once the account exists, `sudo ./InstallEvoAgent.sh --verify-failsafe` confirms it without reinstalling.
 
 ### Jamf Pro

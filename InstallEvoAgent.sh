@@ -117,6 +117,9 @@ AGENT_APP="${EVO_SUPPORT_DIR}/EvoSecurityAgent.app"
 HELPER_BUNDLE_ID="com.evosecurity.EvoMacAgent.Helper"
 HELPER_APP="/Library/PrivilegedHelperTools/${HELPER_BUNDLE_ID}.app"
 HELPER_EXEC="${HELPER_APP}/Contents/MacOS/Helper"
+# Helper -deployment-token exit code when an MSP-wide-key install waits for an admin to assign it (agent 2.2+).
+HELPER_EXIT_PENDING=3
+PENDING_ENROLLMENT_FILE="${EVO_SUPPORT_DIR}/pending-enrollment.json"
 HELPER_INFO_PLIST="${HELPER_APP}/Contents/Info.plist"
 HELPER_DAEMON_PLIST="/Library/LaunchDaemons/${HELPER_BUNDLE_ID}.plist"
 AGENT_BUNDLE_ID="com.evosecurity.EvoSecurityAgent"
@@ -710,6 +713,12 @@ install_artifact_file() {
     esac
 }
 
+# An MSP-wide key whose tenant name didn't resolve waits for an Evo admin to assign the
+# Mac. That is a successful install (the agent keeps connecting), so it must not fail the job.
+report_pending_enrollment() {
+    log_ok "Installed. Waiting for an Evo admin to assign this Mac to a customer (Endpoints > Pending installs)."
+}
+
 # postinstall enrolls with the token and rolls back / fails on a bad token, so after a
 # successful install this is a confirmation; the direct enrollment is a last resort.
 confirm_enrollment() {
@@ -724,6 +733,11 @@ confirm_enrollment() {
         return 0
     fi
 
+    if [ -f "$PENDING_ENROLLMENT_FILE" ]; then
+        report_pending_enrollment
+        return 0
+    fi
+
     log_warn "Agent is not enrolled after install; running Helper deployment-token enrollment directly..."
     echo "Environment: ${DEPLOY_ENV}"
     local rc=0
@@ -731,6 +745,8 @@ confirm_enrollment() {
     if [ "$rc" -eq 0 ] && agent_is_enrolled; then
         record_token_fingerprint
         log_ok "Deployment token enrollment succeeded."
+    elif [ "$rc" -eq "$HELPER_EXIT_PENDING" ]; then
+        report_pending_enrollment
     else
         log_err "Deployment token enrollment failed (exit $rc)."
         echo "   Check token validity, Evo environment (EVO_DEPLOY_ENV), and network/API access."
