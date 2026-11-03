@@ -222,12 +222,14 @@ Place the package on the Mac first (e.g. `/tmp/EvoMacAgent-2.1.7.9.pkg`), then s
 The script never reads from stdin. Download it from a pinned release tag first, then run it, so a failed download fails the job instead of running an empty script:
 
 ```bash
-curl -fsSL -o /tmp/InstallEvoAgent.sh \
-  https://raw.githubusercontent.com/evosecurity/EvoMacAgentDeploymentScripts/v1.0.0/InstallEvoAgent.sh \
-  && sudo bash /tmp/InstallEvoAgent.sh --deployment-token '<token>'
+f=$(mktemp) && curl -fsSL -o "$f" \
+  https://raw.githubusercontent.com/evosecurity/EvoMacAgentDeploymentScripts/v1.1.0/InstallEvoAgent.sh \
+  && sudo bash "$f" --deployment-token '<token>'
 ```
 
-**Global Deployment Tokens.** With a Global Deployment Token the Mac lands in the tenant named by `--tenant-name` / `EVO_TENANT_NAME`. Without one, the script uses the NinjaOne organization (`NINJA_ORGANIZATION_NAME`), or the Datto site (`CS_PROFILE_NAME`) in `InstallEvoAgentDatto.sh`. An unknown name creates the tenant; a likely typo of an existing tenant lands in **Unassigned** for review in the portal.
+`mktemp` rather than a fixed `/tmp` path: another user on the Mac could plant a file there for `sudo` to run.
+
+**Global Deployment Tokens.** With a Global Deployment Token the Mac lands in the tenant named by `--tenant-name` / `EVO_TENANT_NAME`. Without one, the script uses the NinjaOne organization (`NINJA_ORGANIZATION_NAME`), or the Datto site (`CS_PROFILE_NAME`) in `InstallEvoAgentDatto.sh`. An unknown name creates the tenant; a likely typo of an existing tenant waits as a pending install for an Evo admin to assign (see below).
 
 **Pending installs.** If a Global Deployment Token's tenant name doesn't resolve, the install waits as *pending* until an Evo admin assigns it (Endpoints > Computers > Installs waiting for a customer). The scripts report that as a successful install (exit 0), not a failure, so the RMM doesn't retry; the agent keeps connecting until it is assigned.
 
