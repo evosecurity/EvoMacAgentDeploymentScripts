@@ -17,7 +17,7 @@
 #
 # Environment variables (set them as Datto component variables):
 #   EVO_DEPLOYMENT_TOKEN          like --deployment-token
-#   EVO_TENANT_NAME               like --tenant-name (MSP-wide keys only)
+#   EVO_TENANT_NAME               like --tenant-name (Global Deployment Tokens only)
 #   EVO_OVERRIDE_API_HOSTNAME     like --api-override-url
 #   EVO_OVERRIDE_BEACON_HOSTNAME  like --beacon-override-url
 #   EVO_DEPLOY_ENV / EVO_ENV      production | staging | local (default: production)
@@ -95,7 +95,7 @@ PKG_PATH_LOCAL="$(trim "${EVO_PKG_PATH:-}")"
 DEPLOYMENT_TOKEN="$(trim "${EVO_DEPLOYMENT_TOKEN:-}")"
 DEPLOY_ENV="$(trim "${EVO_DEPLOY_ENV:-${EVO_ENV:-}}")"
 DEPLOY_ENV="${DEPLOY_ENV:-production}"
-# Tenant for an MSP-wide deployment key; ignored for tenant tokens.
+# Tenant for a Global Deployment Token; ignored for tenant tokens.
 TENANT_NAME="$(trim "${EVO_TENANT_NAME:-${CS_PROFILE_NAME:-}}")"
 API_OVERRIDE_URL="$(trim "${EVO_OVERRIDE_API_HOSTNAME:-}")"
 BEACON_OVERRIDE_URL="$(trim "${EVO_OVERRIDE_BEACON_HOSTNAME:-}")"
@@ -126,7 +126,7 @@ AGENT_APP="${EVO_SUPPORT_DIR}/EvoSecurityAgent.app"
 HELPER_BUNDLE_ID="com.evosecurity.EvoMacAgent.Helper"
 HELPER_APP="/Library/PrivilegedHelperTools/${HELPER_BUNDLE_ID}.app"
 HELPER_EXEC="${HELPER_APP}/Contents/MacOS/Helper"
-# Helper -deployment-token exit code when an MSP-wide-key install waits for an admin to assign it (agent 2.2+).
+# Helper -deployment-token exit code when a global-key install waits for an admin to assign it (agent 2.2+).
 HELPER_EXIT_PENDING=3
 PENDING_ENROLLMENT_FILE="${EVO_SUPPORT_DIR}/pending-enrollment.json"
 HELPER_INFO_PLIST="${HELPER_APP}/Contents/Info.plist"
@@ -220,7 +220,7 @@ Provisioning (preferred since agent 2.5):
   sudo ./InstallEvoAgentDatto.sh --deployment-token TKN [--environment production|staging|local]
   A token that is already applied (same token and environment, agent enrolled) is not
   re-sent; a different token re-enrolls the agent.
-  MSP-wide key: --tenant-name NAME (or EVO_TENANT_NAME; default: the Datto site) picks the
+  Global Deployment Token: --tenant-name NAME (or EVO_TENANT_NAME; default: the Datto site) picks the
   tenant. Ignored for tenant tokens.
   sudo ./InstallEvoAgentDatto.sh --verify-failsafe     # re-check the fail-safe user, no reinstall
 
@@ -727,7 +727,7 @@ install_artifact_file() {
     esac
 }
 
-# An MSP-wide key whose tenant name didn't resolve waits for an Evo admin to assign the
+# A Global Deployment Token whose tenant name didn't resolve waits for an Evo admin to assign the
 # Mac. That is a successful install (the agent keeps connecting), so it must not fail the job.
 report_pending_enrollment() {
     log_ok "Installed. Waiting for an Evo admin to assign this Mac to a customer (Endpoints > Computers > Installs waiting for a customer)."
