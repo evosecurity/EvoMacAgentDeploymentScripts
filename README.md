@@ -19,6 +19,7 @@ The Windows equivalent lives in [EvoWindowsAgentDeploymentScripts](https://githu
 - [Script: InstallEvoAgentDatto.sh (Datto RMM)](#script-installevoagentdattosh-datto-rmm)
   - [Datto component variables](#datto-component-variables)
   - [Datto example component script](#datto-example-component-script)
+- [Deploying from an RMM or MDM](#deploying-from-an-rmm-or-mdm)
 - [Provisioning](#provisioning)
 - [SecureToken granting](#securetoken-granting)
 - [Upgrades and local packages](#upgrades-and-local-packages)
@@ -78,6 +79,8 @@ Packages are resolved from:
 | `--upgrade` | Install only if the available version is newer than the installed version |
 | `--beta` | Use the beta release channel |
 | `--deployment-token TKN` | Deployment token from the Evo Admin portal (preferred since agent 2.5) |
+| `--tenant-name NAME` | Tenant for this Mac when the token is a Global Deployment Token (ignored for tenant tokens). Defaults to `EVO_TENANT_NAME`, then the NinjaOne organization (Datto script: the Datto site) |
+| `--verify-failsafe` | Re-check that the token's fail-safe user exists on this Mac (exit 0 = yes, 1 = missing, 2 = none configured) |
 | `--pkg PATH` | Install a local `.pkg` file; skips the catalog download |
 | `--pkg-url URL` | Download and install from an explicit `.pkg` URL instead of the catalog (aliases: `--artifact-url`, `--dmg`) |
 | `--securetoken-only` | Only grant a SecureToken on an already-installed agent (see [SecureToken](#securetoken-granting)) |
@@ -99,6 +102,7 @@ These mirror the command-line options and are useful with NinjaOne custom fields
 | Variable | Description | CLI equivalent |
 |----------|-------------|----------------|
 | `EVO_DEPLOYMENT_TOKEN` | Deployment token from portal | `--deployment-token` |
+| `EVO_TENANT_NAME` | Tenant name for Global Deployment Tokens | `--tenant-name` |
 | `ADMIN_USERNAME` | Existing admin that already holds a SecureToken | *(environment only)* |
 | `ADMIN_PASSWORD` | That admin's password | *(environment only)* |
 | `EVO_SECURETOKEN_WAIT_SECONDS` | How long to wait for the agent to be provisioned before the SecureToken grant gives up (default: `180`) | *(environment only)* |
@@ -172,6 +176,7 @@ Create these on the **Install Evo Agent [MAC]** component:
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `EVO_DEPLOYMENT_TOKEN` | String | *(empty)* | Deployment token from Evo Admin |
+| `EVO_TENANT_NAME` | String | *(empty)* | Tenant for a Global Deployment Token (default: the Datto site name) |
 | `EVO_UPGRADE_NOW` | Boolean | `False` | Upgrade only if the available version is newer |
 | `EVO_REMOVE_NOW` | Boolean | `False` | Uninstall the agent |
 | `EVO_SECURETOKEN_NOW` | Boolean | `False` | Only grant a SecureToken on an installed agent |
@@ -209,6 +214,44 @@ Place the package on the Mac first (e.g. `/tmp/EvoMacAgent-2.1.7.9.pkg`), then s
 |----------|--------|
 | `EVO_DEPLOYMENT_TOKEN` | your token |
 | `EVO_PKG_PATH` | `/tmp/EvoMacAgent-2.1.7.9.pkg` |
+
+---
+
+## Deploying from an RMM or MDM
+
+The script never reads from stdin. Download it from a pinned release tag first, then run it, so a failed download fails the job instead of running an empty script:
+
+```bash
+f=$(mktemp) && curl -fsSL -o "$f" \
+  https://raw.githubusercontent.com/evosecurity/EvoMacAgentDeploymentScripts/v1.1.0/InstallEvoAgent.sh \
+  && sudo bash "$f" --deployment-token '<token>'
+```
+
+`mktemp` rather than a fixed `/tmp` path: another user on the Mac could plant a file there for `sudo` to run.
+
+**Global Deployment Tokens.** With a Global Deployment Token the Mac lands in the tenant named by `--tenant-name` / `EVO_TENANT_NAME`. Without one, the script uses the NinjaOne organization (`NINJA_ORGANIZATION_NAME`), or the Datto site (`CS_PROFILE_NAME`) in `InstallEvoAgentDatto.sh`. An unknown name creates the tenant; a likely typo of an existing tenant waits as a pending install for an Evo admin to assign (see below).
+
+**Pending installs.** If a Global Deployment Token's tenant name doesn't resolve, the install waits as *pending* until an Evo admin assigns it (Endpoints > Computers > Installs waiting for a customer). The scripts report that as a successful install (exit 0), not a failure, so the RMM doesn't retry; the agent keeps connecting until it is assigned.
+
+**Fail-safe user.** Tokens that disable the Evo login window (the EUE-only preset) don't need a fail-safe user, so those installs succeed without one. Every other token still requires the fail-safe user to exist on the Mac; once the account exists, `sudo ./InstallEvoAgent.sh --verify-failsafe` confirms it without reinstalling.
+
+### Jamf Pro
+Policy > Scripts: add `InstallEvoAgent.sh` with parameter 4 = token and run it with `--deployment-token "$4"` (add `--tenant-name "$5"` for a Global Deployment Token). Or push the pkg plus the configuration profile below, with no script.
+
+### Microsoft Intune (macOS shell script)
+Devices > macOS > Shell scripts: upload a wrapper containing the pinned download-then-run lines above, with **Run script as signed-in user: No**. Or deploy the pkg as a macOS LOB app plus the configuration profile below.
+
+### Kandji
+Custom Script library item (run once) with the pinned download-then-run lines above, or a Custom App for the pkg plus a Custom Profile.
+
+### NinjaOne
+See [Install with NinjaOne custom fields](#install-with-ninjaone-custom-fields). With a Global Deployment Token, each Ninja organization becomes its tenant automatically.
+
+### Datto RMM
+See [Script: InstallEvoAgentDatto.sh](#script-installevoagentdattosh-datto-rmm). With a Global Deployment Token, the Datto site name becomes the tenant.
+
+### Configuration profile only (agent 2.2+)
+Any MDM can enroll the Mac with just the pkg and a managed-preferences profile for `com.evosecurity.EvoLogin` containing `EVO_DEPLOYMENT_TOKEN` (and `EVO_TENANT_NAME` for a Global Deployment Token). The agent enrolls once; a reboot or the profile staying installed doesn't re-enroll it.
 
 ---
 
